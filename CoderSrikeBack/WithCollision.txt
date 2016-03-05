@@ -1,0 +1,618 @@
+import java.util.*;
+
+class Player {
+
+	@SuppressWarnings("resource")
+	public static void main(String args[]) {
+		Scanner in = new Scanner(System.in);
+		GameData.nbLaps = in.nextInt();
+		GameData.nbCheckpoint = in.nextInt();
+		GameData.nbGoal = GameData.nbLaps * GameData.nbCheckpoint + 3;
+		GameData.currentShipList[0] = new Ship();
+		GameData.currentShipList[1] = new Ship();
+		GameData.currentShipList[2] = new Ship();
+		GameData.currentShipList[3] = new Ship();
+
+		boolean startRound = true;
+		GameAlgorithm GameAlgo = new GameAlgorithm();
+
+		for (int i = 0; i < GameData.nbCheckpoint; i++) {
+			int checkpointX = in.nextInt();
+			int checkpointY = in.nextInt();
+			GameData.listCheckpoint.add(new Pos2D(checkpointX, checkpointY));
+		}
+
+		// game loop
+		while (true) {
+			for (int i = 0; i < 2; i++) {
+				int x = in.nextInt();
+				int y = in.nextInt();
+				int vx = in.nextInt();
+				int vy = in.nextInt();
+				int angle = in.nextInt();
+				int nextCheckPointId = in.nextInt();
+				GameData.currentShipList[i].setPlayer(x, y, vx, vy, angle, nextCheckPointId);
+			}
+			for (int i = 0; i < 2; i++) {
+				int x = in.nextInt();
+				int y = in.nextInt();
+				int vx = in.nextInt();
+				int vy = in.nextInt();
+				int angle = in.nextInt();
+				int nextCheckPointId = in.nextInt();
+				GameData.currentShipList[i + 2].setPlayer(x, y, vx, vy, angle, nextCheckPointId);
+			}
+
+			if (startRound) {
+				GameAlgo.noobAlgorithm(0, 200, 35);
+				GameAlgo.noobAlgorithm(1, 200, 35);
+				startRound = false;
+			} else {
+				GameAlgo.basicAlgorithm(0);
+				GameAlgo.basicAlgorithm(1);
+			}
+		}
+	}
+}
+
+class GameData {
+	static int nbGoal;
+	static int nbCheckpoint;
+	static int nbLaps;
+	static int target = -1;
+	static ArrayList<Pos2D> listCheckpoint = new ArrayList<Pos2D>();
+	static Ship[] currentShipList = new Ship[4];
+	static ArrayList<GameTree.Round> player1bestPath;
+}
+
+class GameAlgorithm {
+	public void noobAlgorithm(int shipID, int speed, int angle) {
+		Ship current = GameData.currentShipList[shipID];
+		current.updateGoalDistance();
+		Pos2D goal = GameData.listCheckpoint.get(current.goalIndex % GameData.nbCheckpoint);
+		int deltaAngle = Math.abs(UtilityFunction.findGoalAngle(current) - current.angle);
+
+		if (deltaAngle < angle) {
+			System.out.println(goal.x + " " + goal.y + " " + speed + " NOOB");
+		} else {
+			System.out.println(goal.x + " " + goal.y + " " + 0 + " NOOB");
+		}
+	}
+
+	public void basicAlgorithm(int shipID){
+        Ship current = GameData.currentShipList[shipID];
+        Ship friend;
+        if(shipID == 0){
+            friend = GameData.currentShipList[1];
+        }else{
+            friend = GameData.currentShipList[0];
+        }
+        
+        Pos2D front = null;
+        int acc = 0;
+        GameTree gameTree = new GameTree(5, shipID);
+        
+        gameTree.createTree();
+        gameTree.calculateBestPath();
+        printBasicAlgoTest(gameTree,current,shipID);
+        
+        int bestMove = gameTree.bestPath.get(0).moveID;
+        
+        
+        if(bestMove == 0){
+            front = UtilityFunction.findFront(-18,shipID);
+            acc = 0;
+        }else if(bestMove == 1){
+            front = UtilityFunction.findFront(+18,shipID);
+            acc = 0;
+        }else if(bestMove == 2){
+            front = UtilityFunction.findFront(-18,shipID);
+            acc = 200;
+        }else if(bestMove == 3){
+            front = UtilityFunction.findFront(+18,shipID);
+            acc = 200;
+        }else if(bestMove == 4){
+            front = UtilityFunction.findFront(0,shipID);
+            acc = 200;
+        }
+    
+        if(true){//shipID == 0){
+            System.out.println(front.x + " " + front.y + " " + acc + " Next X: " + gameTree.bestPath.get(0).shipList[shipID].x + " Next Y: " + gameTree.bestPath.get(0).shipList[shipID].y);
+        }else{
+            if(UtilityFunction.checkHit(shipID)){
+                System.out.println(front.x + " " + front.y + " SHIELD SHIELD!"); 
+            }else{
+                System.out.println(front.x + " " + front.y + " " + acc + " Counter");
+            }
+        }
+        
+    }
+	
+	private void printBasicAlgoTest(GameTree gt, Ship current, int shipID){
+		System.err.println("GOAl = " + current.goalIndex % GameData.nbCheckpoint);
+		System.err.println("BestScrore: " + gt.bestScore);
+		System.err.print("PATH :");
+		for (GameTree.Round r : gt.bestPath) {
+			System.err.print(r.moveID + " ");
+		}
+		System.err.println();
+		System.err.print("Score :");
+		for (GameTree.Round r : gt.bestPath) {
+			System.err.print(r.shipList[shipID].goalDistanceSum + " ");
+		}
+		System.err.println();
+	}
+}
+
+class GameTree {
+	Round start;
+	int depth;
+	Long bestScore = Long.MIN_VALUE;
+	Round bestRound = null;
+	ArrayList<Round> bestPath = new ArrayList<Round>();
+
+	public void createTree() {
+		start.createChild();
+	}
+
+	public GameTree(int depthness,int currentShipID) {
+		this.start = new Round(GameData.currentShipList, depthness, -1, currentShipID);
+		this.depth = depthness;
+	}
+	
+	public void calculateBestPath(){
+    	bestPath.clear();
+    	Round current = this.bestRound;
+    	while(current.parent != null){
+    		bestPath.add(0,current);
+    		current = current.parent;
+    	}
+    	GameData.player1bestPath = this.bestPath;
+	}
+	
+	class Round{
+	    Round parent = null;
+	    Ship[] shipList = new Ship[4];
+	    Round[] child = new Round[5];
+	    int life;
+	    int moveID;
+	    int currentShipID;
+	    
+	    public void createChild(){
+	        this.shipList[currentShipID].updateGoalDistance();
+	        for(int i = 0;i<this.child.length;i++){
+	            child[i] = new Round(cloneShips(), life-1,i,currentShipID);
+	            child[i].parent = this;
+	        } 
+	        
+	        this.updateChild();
+	        
+	        for(int i = 0;i<this.child.length;i++){
+	            if(child[i].life>0){
+	                child[i].createChild();
+	            }else{
+	            	for(int j = 0;j<4;j++){
+	            		
+	            		child[i].shipList[j].updateGoalDistance();
+	            	}
+	                
+	            	Long currentScore = calculateScore();
+	                if(bestScore < currentScore){
+	                	bestScore = currentScore;
+	                	bestRound = child[i];
+	                }
+	            }
+	        }
+	    }
+	    
+	    public Long calculateScore(){
+	    	long heuristic1 ; //I am getting closer
+	    	double k1 = 1;
+	    	long heuristic2; //My best player is get closer
+	    	double k2 = 1;
+	    	long heuristic3; // the other team is getting less closer ?
+	    	double k3 = 1;
+	    	long heuristic4; // difference distance me-enemy
+	    	double k4 = 0;
+	    	long heuristic5 = 0; // ditance to enemy goal +2
+	    	double k5 = 0;
+	    	long heuristic6 = 0; // angle face the enemy
+	    	double k6 = 0;
+	    	
+	    	int friendID;
+	    	if(this.currentShipID == 0){
+	    		friendID = 1;
+	    	}else{
+	    		friendID = 0;
+	    	}
+	    	
+	    	Ship currentShip = this.shipList[this.currentShipID];
+	    	Ship friendShip = this.shipList[friendID];
+	    	
+	    	Ship WorstTeamate;
+	    	Ship BestTeamate;
+	    	
+	    	if(friendShip.goalDistanceSum > currentShip.goalDistanceSum){
+	    	    WorstTeamate = friendShip;
+	    	    BestTeamate = currentShip;
+	    	}else{
+	    	    WorstTeamate = currentShip;
+	    	    BestTeamate = friendShip;
+	    	}
+	    	
+	    	Ship WorstEnemy;
+	    	Ship BestEnemy;
+	    	
+	    	if(this.shipList[2].goalDistanceSum>this.shipList[3].goalDistanceSum){
+	    		BestEnemy = this.shipList[3];
+	    		WorstEnemy = this.shipList[2];
+	    	}else{
+	    		BestEnemy = this.shipList[2];
+	    		WorstEnemy = this.shipList[3];
+	    	}
+	    	
+	    	//h1
+	    	
+	    	heuristic1 = -currentShip.goalDistanceSum;
+	    	
+	    	//h2
+	    	
+	    	heuristic2 = -BestTeamate.goalDistanceSum;
+	    	
+	    	//h3
+	    	
+	    	heuristic3 = BestEnemy.goalDistanceSum;
+	    	
+	    	//h4
+	    	
+	    	heuristic4 = BestEnemy.goalDistanceSum - BestTeamate.goalDistanceSum ;
+	    	
+	    	//h5
+	    	//if(currentShip == WorstTeamate){
+	    	    if(BestEnemy.nbGoalPass>GameData.target){
+	    	        GameData.target = BestEnemy.nbGoalPass+1;
+	    	    }
+	    	    Pos2D futurEnemyGoal = GameData.listCheckpoint.get(GameData.target % GameData.nbCheckpoint);
+	    	    heuristic5 = -(long)UtilityFunction.getDistance(currentShip.x,currentShip.y,futurEnemyGoal.x,futurEnemyGoal.y);
+	    	//}
+	    	
+	    	//h6
+	    	    heuristic6 = Math.abs(currentShip.angle - UtilityFunction.findGoalAngle(currentShip, BestEnemy));
+	    	
+	    	
+	    	if(false){
+	    	    return heuristic1;
+	    	}else{
+	    	    return (long)((double)heuristic1 * k1 + (double)heuristic2 * k2 + (double)heuristic3 * k3 + (double)heuristic4 * k4 + (double)heuristic5 * k5 + (double)heuristic6 * k6);
+	    	}
+	    }
+	    
+	    public void updateChild(){
+	        child[0].findAllNext(0,-18,currentShipID);
+	        child[1].findAllNext(0,+18,currentShipID);
+	        child[2].findAllNext(200,-18,currentShipID);
+	        child[3].findAllNext(200,+18,currentShipID);
+	        child[4].findAllNext(200,0,currentShipID);
+	    }
+	    
+	    public void findAllNext(int acc, int angleRot, int shipID){
+	    	
+	    	Random rand = new Random();
+	    	
+	    	for(int i=0;i<4;i++){
+	    		if(i == shipID){
+	    			updatePosition(acc, angleRot,shipID);
+	    		}else if(i==0){//friend
+	    			int runnerMove = GameData.player1bestPath.get(GameData.player1bestPath.size() - this.life -1).moveID;
+	    	        
+	    	        //System.err.println(runnerMove);
+	    	        
+	    	        if(runnerMove == 0){
+	    	        	updatePosition(0, -18,i);
+	    	        }else if(runnerMove == 1){
+	    	        	updatePosition(0, +18,i);
+	    	        }else if(runnerMove == 2){
+	    	        	updatePosition(200, -18,i);
+	    	        }else if(runnerMove == 3){
+	    	        	updatePosition(200, +18,i);
+	    	        }else if(runnerMove == 4){
+	    	        	updatePosition(200, 0,i);
+	    	        }
+	    		}else{
+	    		    int nextAngle = UtilityFunction.findGoalAngleBestRot(this.shipList[i]);
+	    			//int  randAngle = rand.nextInt(18*2+1) - 18;
+	    			updatePosition(200,nextAngle,i);
+	    		}
+	    	}
+	    	
+	    	for(int i=0;i<4;i++){
+	    		detectCollisions(i);
+	    	}
+	    	
+	    	
+	    	//updatePosition(acc, angleRot,shipID);
+	    	//detectCollisions(shipID);
+	    }
+	    public void updatePosition(int acc, int angleRot, int shipID){
+	    	Ship current = this.shipList[shipID];
+	    	
+			int nextAngle = UtilityFunction.normalizeAngle(current.angle + angleRot);
+
+			double accX = (acc * Math.cos(Math.toRadians(nextAngle)));
+			double accY = (acc * Math.sin(Math.toRadians(nextAngle)));
+
+			int velocityX = (int) Math.round(current.vx + accX);
+			int velocityY = (int) Math.round(current.vy + accY);
+
+			current.x = current.x + velocityX;
+			current.y = current.y + velocityY;
+
+			current.vx = (int) (velocityX * 0.85);
+			current.vy = (int) (velocityY * 0.85);
+
+			current.angle = nextAngle;
+	    }
+	    
+	    public void detectCollisions(int shipID){
+	    	for(int i=0;i<4;i++){
+	    		if(i != shipID){
+	    			calculateCollision(shipID, i);
+	    		}
+	    	}
+	    }
+	    
+	    public void calculateCollision(int myID, int enemyID){
+	    	Ship first = this.shipList[myID];
+	    	Ship second = this.shipList[enemyID];
+	    	
+		    if (UtilityFunction.getDistance(first.x, first.y, second.x, second.y) < 800)
+		    {
+		        double m1 = 1;
+		    	double m2 = 1;
+		    	double vx1 = first.vx;
+		    	double vx2 = second.vx;
+		    	double vy1 = first.vy;
+		    	double vy2 = second.vy;
+		    	double x1 = first.x;
+		    	double x2 = second.x;
+		    	double y1 = first.y;
+		    	double y2 = second.y;
+		    	double m21 = m2/m1;
+		    	double x21 = x2-x1;
+		    	double y21 = y2-y1;
+		    	double vx21 = vx2 - vx1;
+		    	double vy21 = vy2 - vy1;
+		    	double vx_cm = (m1*vx1+m2*vx2)/(m1+m2) ;
+                double vy_cm = (m1*vy1+m2*vy2)/(m1+m2) ;
+                double sign;
+                
+                if ( (vx21*x21 + vy21*y21) >= 0){
+                    return;
+                }
+                
+                double fy21=1.0E-12*Math.abs(y21); 
+                if ( Math.abs(x21)<fy21 ) {  
+                   if (x21<0) { sign=-1; } else { sign=1;}  
+                   x21=fy21*sign; 
+                } 
+		    	
+                double a = y21/x21;
+                double dvx2 = -2*(vx21 +a*vy21)/((1+a*a)*(1+m21)) ;
+                second.vx = (int) (vx2+dvx2);
+                second.vy = (int) (vy2+a*dvx2);
+                first.vx = (int) (vx1-m21*dvx2);
+                first.vy = (int) (vy1-a*m21*dvx2);
+		    	
+		    	first.x += first.vx;
+		    	second.x += second.vx;
+		    	first.y += first.vy;
+		    	second.y += second.vy;
+		    }
+	    }
+	    
+	    public Ship[] cloneShips() {
+	    	Ship[] c = new Ship[this.shipList.length];
+	        for(int i=0;i<c.length;i++){
+	        	c[i] = this.shipList[i].clone();
+	        }
+	        return c;
+	    }
+	    
+	    public Round(Ship[] ships, int life, int moveID, int currentShipID){
+	        this.shipList = ships;
+	        this.life = life;
+	        this.moveID = moveID;
+	        this.currentShipID = currentShipID;
+	    }
+	}
+}
+
+class Ship {
+	int x;
+	int y;
+	int vx;
+	int vy;
+	int angle;
+	int nextGoal;
+	long GOAL_DISTANCE_DEFAULT = 1000000;
+	long[] goalDistance;
+	long goalDistanceSum;
+	int goalIndex;
+	int nbGoalPass;
+
+	public Ship() {
+		this.goalDistance = new long[GameData.nbGoal + 2];
+
+		for (int i = 0; i < goalDistance.length; i++) {
+			this.goalDistance[i] = GOAL_DISTANCE_DEFAULT;
+		}
+		this.goalIndex = 1;
+	}
+
+	public void updateGoalDistance() {
+		Pos2D goal = GameData.listCheckpoint.get(goalIndex % GameData.nbCheckpoint);
+
+		if (UtilityFunction.getDistance(goal.x, goal.y, this.x, this.y) < 600) {
+			goalIndex++;
+			goal = GameData.listCheckpoint.get(goalIndex % GameData.nbCheckpoint);
+		}
+
+		goalDistance[goalIndex] = UtilityFunction.getDistance(goal.x, goal.y, this.x, this.y);
+
+		updateGoalDistanceSum();
+	}
+
+	public void updateGoalDistanceSum() {
+		this.goalDistanceSum = 0;
+		for (int i = 0; i < goalDistance.length; i++) {
+			this.goalDistanceSum += this.goalDistance[i];
+		}
+	}
+
+	public void setPlayer(int x, int y, int vx, int vy, int angle, int nextGoal) {
+		if (nextGoal != this.nextGoal) {
+			nbGoalPass++;
+		}
+		this.x = x;
+		this.y = y;
+		this.vx = vx;
+		this.vy = vy;
+		this.angle = angle;
+		this.nextGoal = nextGoal;
+	}
+
+	public void printData() {
+		System.err.println("---- LAST SHIP DATA");
+		System.err.println("X: " + this.x);
+		System.err.println("Y: " + this.y);
+		System.err.println("VX: " + this.vx);
+		System.err.println("VY: " + this.vy);
+		System.err.println("Angle: " + this.angle);
+		System.err.println("NextGoal: " + this.nextGoal);
+		System.err.println("----");
+	}
+
+	public Ship clone() {
+		Ship clone = new Ship();
+		clone.x = x;
+		clone.y = y;
+		clone.vx = vx;
+		clone.vy = vy;
+		clone.angle = angle;
+		clone.nextGoal = nextGoal;
+		clone.goalDistanceSum = goalDistanceSum;
+		clone.goalIndex = goalIndex;
+		clone.nbGoalPass = nbGoalPass;
+
+		for (int i = 0; i < goalDistance.length; i++) {
+			clone.goalDistance[i] = this.goalDistance[i];
+		}
+
+		return clone;
+	}
+}
+
+class UtilityFunction {
+	static public int normalizeAngle(int angle) {
+		int newAngle = angle;
+		while (newAngle <= 0)
+			newAngle += 360;
+		while (newAngle > 360)
+			newAngle -= 360;
+		return newAngle;
+	}
+
+	static public int getDistance(int ax, int ay, int bx, int by) {
+		return (int) Math.hypot(ax - bx, ay - by);
+	}
+	
+	static public int findGoalAngle(Ship current, Ship goal) {
+		double deltaX = goal.x - current.x;
+		double deltaY = goal.y - current.y;
+		double angleG = Math.toDegrees(Math.atan2(deltaY, deltaX));
+
+		return UtilityFunction.normalizeAngle((int) angleG);
+	}
+
+	static public int findGoalAngle(Ship current, int goalID) {
+		Pos2D goal = GameData.listCheckpoint.get(goalID);
+
+		double deltaX = goal.x - current.x;
+		double deltaY = goal.y - current.y;
+		double angleG = Math.toDegrees(Math.atan2(deltaY, deltaX));
+
+		return UtilityFunction.normalizeAngle((int) angleG);
+	}
+
+	static public int findGoalAngle(Ship current) {
+		Pos2D goal = GameData.listCheckpoint.get(current.goalIndex % GameData.nbCheckpoint);
+
+		double deltaX = goal.x - current.x;
+		double deltaY = goal.y - current.y;
+		double angleG = Math.toDegrees(Math.atan2(deltaY, deltaX));
+
+		return UtilityFunction.normalizeAngle((int) angleG);
+	}
+	
+	static public int findGoalAngleBestRot(Ship current) {
+		Pos2D goal = GameData.listCheckpoint.get(current.goalIndex % GameData.nbCheckpoint);
+
+		double deltaX = goal.x - current.x;
+		double deltaY = goal.y - current.y;
+		double angleG = Math.toDegrees(Math.atan2(deltaY, deltaX));
+		
+		double angle2Rot = angleG - current.angle;
+		
+		if(angle2Rot > 18){angle2Rot = 18;}
+		if(angle2Rot < -18){angle2Rot = -18;}
+
+		return (int)angle2Rot;
+	}
+	
+	public static Pos2D findFront(int relatifAngle, int shipID) {
+		Pos2D result = new Pos2D();
+		Ship current = GameData.currentShipList[shipID];
+
+		int realAngle = UtilityFunction.normalizeAngle(current.angle + relatifAngle);
+		int distance = 1000;
+
+		result.x = (int) (Math.cos(Math.toRadians(realAngle)) * distance) + current.x;
+		result.y = (int) (Math.sin(Math.toRadians(realAngle)) * distance) + current.y;
+
+		return result;
+	}
+	
+	public static boolean checkHit(int shipID){
+        boolean result = false;
+        Ship current = GameData.currentShipList[shipID];
+        Ship closestEnemy;
+        
+        for(int i=2;i<4;i++){
+            if(i!=shipID){
+                closestEnemy = GameData.currentShipList[i];
+                
+                int deltaX = Math.abs((closestEnemy.x+closestEnemy.vx) - (current.x+current.vx));
+                int deltaY = Math.abs((closestEnemy.y+closestEnemy.vy) - (current.y+current.vy));
+                
+                if(deltaX<800 && deltaY<800){
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+	}
+}
+
+class Pos2D {
+	int x;
+	int y;
+
+	public Pos2D() {
+	}
+
+	public Pos2D(int x, int y) {
+		this.x = x;
+		this.y = y;
+	}
+}
